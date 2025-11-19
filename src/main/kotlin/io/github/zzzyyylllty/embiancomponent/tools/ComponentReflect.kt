@@ -8,7 +8,6 @@ import com.mojang.serialization.DynamicOps
 import com.mojang.serialization.JsonOps
 import io.github.zzzyyylllty.embiancomponent.utils.*
 import org.bukkit.inventory.ItemStack
-import taboolib.common.platform.function.severe
 import java.util.Objects.requireNonNull
 import java.util.Optional
 //import net.minecraft.core.component.DataComponentType

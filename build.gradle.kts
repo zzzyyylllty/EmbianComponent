@@ -1,22 +1,13 @@
-import io.izzel.taboolib.gradle.*
+
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     java
     `maven-publish`
-    id("io.izzel.taboolib") version "2.0.27"
+    // id("io.izzel.taboolib") version "2.0.27"
     kotlin("jvm") version "1.8.22"
 }
 
-taboolib {
-    subproject = true  // 关键配置
-    env {
-        install(Basic, Bukkit, BukkitUI)
-    }
-    version {
-        taboolib = "6.2.3-1a8d7125"
-    }
-}
 
 repositories {
     mavenCentral()

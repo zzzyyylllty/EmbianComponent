@@ -1,13 +1,10 @@
 package io.github.zzzyyylllty.embiancomponent.utils
 
-import taboolib.common.ClassAppender
-import taboolib.library.reflex.Reflex
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Optional
 
-val ref = Reflex
 const val MC_PREFIX = "net.minecraft."
 const val CB_PREFIX = "org.bukkit.craftbukkit."
 
@@ -106,13 +103,3 @@ fun getMethod(
                     returnType.isAssignableFrom(method.returnType)
         }
         .getOrNull(index)
-
-fun isClassExistsSafety(path: String?): Boolean {
-    return try {
-        ClassAppender.isExists(path)
-    } catch (ignored: ClassNotFoundException) {
-        false
-    } catch (ignored: NoClassDefFoundError) {
-        false
-    }
-}
