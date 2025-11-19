@@ -21,7 +21,7 @@ dependencies {
 //    compileOnly("ink.ptms.core:v12104:12104:universal")
     compileOnly(kotlin("stdlib"))
     compileOnly("com.google.code.gson:gson:2.10.1")
-    compileOnly("org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT")
+    compileOnly("org.spigotmc:spigot-api:1.21.4-R0.1-SNAPSHOT")
 }
 
 tasks.withType<JavaCompile> {
