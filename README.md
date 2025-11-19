@@ -6,7 +6,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.github.zzzyyylllty.embiancomponent:EmbianComponent:VERSION")
+    implementation("io.github.zzzyyylllty.embiancomponent:EmbianComponent:VERSION")
 }
 ```
 
