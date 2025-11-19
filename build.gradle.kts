@@ -12,11 +12,14 @@ plugins {
 repositories {
     mavenCentral()
     maven("https://libraries.minecraft.net")
+    maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://repo.papermc.io/repository/maven-snapshots/")
 }
 
 dependencies {
-    compileOnly("ink.ptms.core:v12104:12104:mapped")
-    compileOnly("ink.ptms.core:v12104:12104:universal")
+//    compileOnly("ink.ptms.core:v12104:12104:mapped")
+//    compileOnly("ink.ptms.core:v12104:12104:universal")
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly(kotlin("stdlib"))
     compileOnly("com.google.code.gson:gson:2.10.1")
 }
