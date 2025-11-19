@@ -6,7 +6,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.zzzyyylllty.embiancomponent:EmbianComponent:VERSION")
+    implementation("io.github.zzzyyylllty:EmbianComponent:VERSION")
 }
 ```
 
@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    taboo("io.github.zzzyyylllty.embiancomponent:EmbianComponent:VERSION")
+    taboo("io.github.zzzyyylllty:EmbianComponent:VERSION")
 }
 ```
 
