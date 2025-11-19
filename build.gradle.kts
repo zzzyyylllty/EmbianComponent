@@ -40,3 +40,14 @@ configure<JavaPluginConvention> {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
 }
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components.findByName("java"))
+            groupId = project.group.toString()
+            artifactId = rootProject.name
+            version = project.version.toString()
+        }
+    }
+}
