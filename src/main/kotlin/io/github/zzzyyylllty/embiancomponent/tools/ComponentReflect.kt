@@ -284,7 +284,7 @@ fun <T> getComponent(itemStack: Any, type: Any, ops: DynamicOps<T>): Optional<T>
 fun setComponentInternal(itemStack: Any, type: Any, ops: DynamicOps<*>, value: Any) {
     val res = ensureDataComponentType(type)
     if (res == null) {
-        throw IllegalStateException("Component Setting Failed: $type cannot be set to $value . Is this component exist in this version?")
+        return // Component not exist
     }
     val codec = `method$DataComponentType$codec`.invoke(res) as Codec<Any>
     val result = codec.parse(ops as DynamicOps<Any>, value)
