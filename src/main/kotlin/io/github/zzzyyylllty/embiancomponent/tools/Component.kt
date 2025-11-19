@@ -4,108 +4,107 @@ import com.google.gson.JsonElement
 import org.bukkit.inventory.ItemStack
 
 class ComponentSetter {
-
     /**
-     * 获取物品的 **所有** 数据组件。
-     * 包括没有过滤的组件，例如剑 **会** 返回包括damage=0的默认组件。
-     * @param item Bukkit物品
-     * */
+     * Gets **all** data components of an item.
+     * Includes unfiltered components, e.g., a sword **will** return the default component with damage=0.
+     * @param item The Bukkit ItemStack.
+     */
     fun getAllComponents(item: ItemStack): Map<String, Any?> {
         return asNMSCopyMethod(item).getComponentsNMS()
     }
 
     /**
-     * 获取物品的 **所有过滤掉默认组件后的** 数据组件。
-     * 不包括没有过滤的组件，例如剑 **不会** 返回包括damage=0的默认组件。
-     * @param item Bukkit物品
-     * */
+     * Gets **all** data components of an item **after filtering out default ones**.
+     * Excludes unfiltered components, e.g., a sword **will not** return the default component with damage=0.
+     * @param item The Bukkit ItemStack.
+     */
     fun getAllComponentsFiltered(item: ItemStack): Map<String, Any?> {
         return asNMSCopyMethod(item).getComponentsNMSFiltered()
     }
 
     /**
-     * 获取物品的 **所有** 数据组件。(以 NMS 物品获取)
-     * 包括没有过滤的组件，例如剑 **会** 返回包括damage=0的默认组件。
-     * @param item NMS物品
-     * */
+     * Gets **all** data components of an item (from an NMS item).
+     * Includes unfiltered components, e.g., a sword **will** return the default component with damage=0.
+     * @param item The NMS ItemStack.
+     */
     fun getAllComponentsNMS(item: Any): Map<String, Any?> {
         return item.getComponentsNMS()
     }
 
     /**
-     * 获取物品的 **所有过滤掉默认组件后的** 数据组件。(以 NMS 物品获取)
-     * 不包括没有过滤的组件，例如剑 **不会** 返回包括damage=0的默认组件。
-     * @param item NMS物品
-     * */
+     * Gets **all** data components of an item **after filtering out default ones** (from an NMS item).
+     * Excludes unfiltered components, e.g., a sword **will not** return the default component with damage=0.
+     * @param item The NMS ItemStack.
+     */
     fun getAllComponentsFilteredNMS(item: Any): Map<String, Any?> {
         return item.getComponentsNMSFiltered()
     }
 
     /**
-     * 获取物品的指定的数据组件。
+     * Gets a specific data component of an item.
      *
-     * 如果多次使用，请使用如下代码以避免频繁转换 ItemStack。
+     * If used multiple times, consider the following code to avoid frequent ItemStack conversions:
      * ```
      * val nmsItem = asNMSCopy(yourBukkitItem)
      * ComponentSetter().getComponentNMS(nmsItem, ...)
      * ComponentSetter().getComponentNMS(nmsItem, ...) ...
      * ```
      *
-     * @param item Bukkit物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * */
+     * @param item The Bukkit ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     */
     fun getComponent(item: ItemStack, component: String): JsonElement? {
         return asNMSCopyMethod(item).getComponentNMS(component)
     }
 
 
     /**
-     * 获取物品的指定的数据组件。
+     * Gets a specific data component of an item.
      *
-     * @param item NMS物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * */
+     * @param item The NMS ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     */
     fun getComponentNMS(item: Any, component: String): JsonElement? {
         return item.getComponentNMS(component)
     }
 
     /**
-     * 获取物品的指定的数据组件。
+     * Gets a specific data component of an item.
      *
-     * 使用 Java 组件解析器。
+     * Uses the Java component parser.
      *
-     * 如果多次使用，请使用如下代码以避免频繁转换 ItemStack。
+     * If used multiple times, consider the following code to avoid frequent ItemStack conversions:
      * ```
      * val nmsItem = asNMSCopy(yourBukkitItem)
      * ComponentSetter().getComponentJavaNMS(nmsItem, ...)
      * ComponentSetter().getComponentJavaNMS(nmsItem, ...) ...
      * ```
      *
-     * @param item Bukkit物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * */
+     * @param item The Bukkit ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     */
     fun <T> getComponentJava(item: ItemStack, component: String): T? {
         return asNMSCopyMethod(item).getComponentJavaNMS<T>(component)
     }
 
 
     /**
-     * 获取物品的指定的数据组件。(以 NMS 物品获取)
+     * Gets a specific data component of an item (from an NMS item).
      *
-     * 使用 Java 组件解析器。
+     * Uses the Java component parser.
      *
-     * @param item NMS物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * */
+     * @param item The NMS ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     */
     fun <T> getComponentJavaNMS(item: Any, component: String): T? {
         return item.getComponentJavaNMS<T>(component)
     }
 
 
     /**
-     * 修改给定物品的指定的数据组件并作为返回值返回，不修改原物品。
+     * Modifies a specific data component of the given item and returns it as a new item, without modifying the original.
      *
-     * 如果多次使用，请直接使用 `setComponentNMS` 以避免额外转换的性能损耗。示例:
+     * If used multiple times, use `setComponentNMS` directly to avoid performance loss from extra conversions. Example:
      * ```
      * var nmsItem = asNMSCopy(yourBukkitItem)
      * nmsItem = ComponentSetter().setComponentNMS(nmsItem, ...)
@@ -113,56 +112,57 @@ class ComponentSetter {
      * val finalItem = asBukkitCopy(nmsItem)
      * ```
      *
-     * @param item Bukkit物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * @param value 组件值，直接传入对应类型即可，一般是传入一个Map<String, Any>
-     * @return 修改后的 Bukkit 物品。
-     * */
+     * @param item The Bukkit ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     * @param value The component value, usually a Map<String, Any>.
+     * @return The modified Bukkit ItemStack.
+     */
     fun setComponent(item: ItemStack, component: String, value: Any): ItemStack? {
         return asBukkitCopyMethod(asNMSCopyMethod(item).setComponentNMS(component, value)) as ItemStack?
     }
 
 
     /**
-     * 修改给定物品的指定的数据组件并作为返回值返回，不修改原物品。(以 NMS 物品获取)
+     * Modifies a specific data component of the given item and returns it as a new item, without modifying the original (from an NMS item).
      *
-     * @param item NMS物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * @param value 组件值，直接传入对应类型即可，一般是传入一个Map<String, Any>
-     * @return 修改后的 NMS 物品。
-     * */
+     * @param item The NMS ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     * @param value The component value, usually a Map<String, Any>.
+     * @return The modified NMS ItemStack.
+     */
     fun setComponentNMS(item: Any, component: String, value: Any): Any? {
         return item.setComponentNMS(component, value)
     }
 
 
     /**
-     * 移除给定物品的指定的数据组件并作为返回值返回，不修改原物品。
+     * Removes a specific data component from the given item and returns it as a new item, without modifying the original.
      *
-     * 如果多次使用，请直接使用 `setComponentNMS` 以避免额外转换的性能损耗。示例:
+     * If used multiple times, use `removeComponentNMS` directly to avoid performance loss from extra conversions. Example:
      * ```
      * var nmsItem = asNMSCopy(yourBukkitItem)
-     * nmsItem = ComponentSetter().setComponentNMS(nmsItem, ...)
-     * nmsItem = ComponentSetter().setComponentNMS(nmsItem, ...) ...
+     * nmsItem = ComponentSetter().removeComponentNMS(nmsItem, ...)
+     * nmsItem = ComponentSetter().removeComponentNMS(nmsItem, ...) ...
      * val finalItem = asBukkitCopy(nmsItem)
      * ```
-     * @param item Bukkit物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * @return 修改后的 NMS 物品。
-     * */
+     * @param item The Bukkit ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     * @return The modified Bukkit ItemStack.
+     */
     fun removeComponent(item: ItemStack, component: String): ItemStack? {
         return asBukkitCopyMethod(asNMSCopyMethod(item).removeComponentNMS(component)) as ItemStack?
     }
 
     /**
-     * 移除给定物品的指定的数据组件并作为返回值返回，不修改原物品。(以 NMS 物品获取)
+     * Removes a specific data component from the given item and returns it as a new item, without modifying the original (from an NMS item).
      *
-     * @param item NMS物品
-     * @param component 组件id，形如 `minecraft:custom_data`
-     * @return 修改后的 NMS 物品。
-     * */
+     * @param item The NMS ItemStack.
+     * @param component The component ID, e.g., `minecraft:custom_data`.
+     * @return The modified NMS ItemStack.
+     */
     fun removeComponentNMS(item: Any, component: String): Any? {
         return item.removeComponentNMS(component)
     }
+
 
 }
