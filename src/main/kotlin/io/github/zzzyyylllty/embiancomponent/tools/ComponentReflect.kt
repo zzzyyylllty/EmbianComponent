@@ -4,7 +4,7 @@ import com.google.gson.JsonElement
 import com.mojang.serialization.Codec
 import com.mojang.serialization.DataResult
 import com.mojang.serialization.DynamicOps
-//import com.mojang.serialization.JavaOps
+import com.mojang.serialization.JavaOps
 import com.mojang.serialization.JsonOps
 import io.github.zzzyyylllty.embiancomponent.utils.*
 import org.bukkit.inventory.ItemStack
@@ -216,11 +216,12 @@ val `instance$DynamicOps$NBT` by lazy {
         `instance$MinecraftServer$registryAccess`
     )!! as DynamicOps<Any>
 }
+
 @Suppress("UNCHECKED_CAST")
 val `instance$DynamicOps$JAVA` by lazy {
     `method$RegistryOps$create`.invoke(
         null,
-        getClazz("com.mojang.serialization.JavaOps"),
+        JavaOps.INSTANCE,
         `instance$MinecraftServer$registryAccess`
     )!! as DynamicOps<Any>
 }
@@ -339,6 +340,18 @@ val craftItemStackClass by lazy { getClazz(assembleCBClass("inventory.CraftItemS
 val asNMSCopyMethod by lazy { craftItemStackClass.getMethod("asNMSCopy", ItemStack::class.java) }
 val asBukkitCopyMethod by lazy { craftItemStackClass.getMethod("asBukkitCopy", `clazz$ItemStack`) }
 
+fun asNMSCopy(itemStack: ItemStack?): Any {
+    return asNMSCopyMethod.invoke(null, itemStack)
+}
+
+
+fun asBukkitCopy(itemStack: Any?): ItemStack {
+    return asBukkitCopyMethod.invoke(null, itemStack) as ItemStack
+}
+
+
+
+
 fun Any.setComponentNMS(componentId: String,value: Any): Any {
     try {
         setComponentInternal(this, componentId, value)
@@ -418,7 +431,7 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
         val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr)
         val componentTypeOptional = `method$Registry$getValue`.invoke(`instance$BuiltInRegistries$DATA_COMPONENT_TYPE`, resourceLocation)
             ?: continue
-        val componentType = unwrapValue(componentTypeOptional)
+        val componentType = unwrapValue(componentTypeOptional) ?: continue
 
         val valueMethod = typedDataComponent.javaClass.getMethod("value")
         val componentValue = valueMethod.invoke(typedDataComponent)
@@ -460,7 +473,7 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
             }
         }
 
-        // 转换NBT数据为Json
+        // 转换NBT数据为Java
         val jsonResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
         if (jsonResult.isError) continue
         val componentJson = jsonResult.result().orElse(null) ?: continue
@@ -521,7 +534,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
             `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
             resourceLocation
         ) ?: continue
-        val componentType = unwrapValue(componentTypeOptional)
+        val componentType = unwrapValue(componentTypeOptional) ?: continue
 
         println("componentType class: ${componentType.javaClass.name}")
         println("isInstance: ${`clazz$DataComponentType`.isInstance(componentType)}")
@@ -639,7 +652,7 @@ fun Any.getComponentsNMSFiltered(): Map<String, Any?> {
         }
 
         // 获取 codec（使用缓存的方法查找逻辑）
-        val codec = getCodecForComponentType(componentType) ?: continue
+        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
 
         // 使用 JAVA DynamicOps 编码
         val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)

@@ -20,10 +20,11 @@ fun assembleCBClass(className: String): String {
 
 val holderClass by lazy { getClazz("net.minecraft.core.Holder")!! }
 
-fun unwrapValue(obj: Any): Any {
+fun unwrapValue(obj: Any): Any? {
     if (obj is Optional<*>) {
         if (obj.isPresent) return unwrapValue(obj.get())
-        throw IllegalArgumentException("Optional empty")
+        return null
+        // throw IllegalArgumentException("Optional empty")
     }
     if (holderClass.isInstance(obj)) {
         val methodNameCandidates = listOf("get", "value")

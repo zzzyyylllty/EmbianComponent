@@ -10,7 +10,7 @@ class ComponentSetter {
      * @param item The Bukkit ItemStack.
      */
     fun getAllComponents(item: ItemStack): Map<String, Any?> {
-        return asNMSCopyMethod(item).getComponentsNMS()
+        return asNMSCopy(item).getComponentsNMS()
     }
 
     /**
@@ -19,7 +19,7 @@ class ComponentSetter {
      * @param item The Bukkit ItemStack.
      */
     fun getAllComponentsFiltered(item: ItemStack): Map<String, Any?> {
-        return asNMSCopyMethod(item).getComponentsNMSFiltered()
+        return asNMSCopy(item).getComponentsNMSFiltered()
     }
 
     /**
@@ -54,7 +54,7 @@ class ComponentSetter {
      * @param component The component ID, e.g., `minecraft:custom_data`.
      */
     fun getComponent(item: ItemStack, component: String): JsonElement? {
-        return asNMSCopyMethod(item).getComponentNMS(component)
+        return asNMSCopy(item).getComponentNMS(component)
     }
 
 
@@ -84,7 +84,7 @@ class ComponentSetter {
      * @param component The component ID, e.g., `minecraft:custom_data`.
      */
     fun <T> getComponentJava(item: ItemStack, component: String): T? {
-        return asNMSCopyMethod(item).getComponentJavaNMS<T>(component)
+        return asNMSCopy(item).getComponentJavaNMS<T>(component)
     }
 
 
@@ -118,7 +118,7 @@ class ComponentSetter {
      * @return The modified Bukkit ItemStack.
      */
     fun setComponent(item: ItemStack, component: String, value: Any): ItemStack? {
-        return asBukkitCopyMethod(asNMSCopyMethod(item).setComponentNMS(component, value)) as ItemStack?
+        return asBukkitCopy(asNMSCopy(item).setComponentNMS(component, value)) as ItemStack?
     }
 
 
@@ -136,33 +136,74 @@ class ComponentSetter {
 
 
     /**
-     * Removes a specific data component from the given item and returns it as a new item, without modifying the original.
+     * Removes a specific data component from this NMS ItemStack instance via reflection.
+     * This method modifies the item stack in-place.
      *
-     * If used multiple times, use `removeComponentNMS` directly to avoid performance loss from extra conversions. Example:
-     * ```
-     * var nmsItem = asNMSCopy(yourBukkitItem)
-     * nmsItem = ComponentSetter().removeComponentNMS(nmsItem, ...)
-     * nmsItem = ComponentSetter().removeComponentNMS(nmsItem, ...) ...
-     * val finalItem = asBukkitCopy(nmsItem)
-     * ```
-     * @param item The Bukkit ItemStack.
-     * @param component The component ID, e.g., `minecraft:custom_data`.
-     * @return The modified Bukkit ItemStack.
+     * @param componentId The resource location string of the component to remove, e.g., "minecraft:custom_name".
      */
-    fun removeComponent(item: ItemStack, component: String): ItemStack? {
-        return asBukkitCopyMethod(asNMSCopyMethod(item).removeComponentNMS(component)) as ItemStack?
+    fun removeComponentNMSDirectly(item: Any, componentId: String) { // Return type changed to Unit for clarity
+        val componentType = ensureDataComponentType(componentId) ?: return
+
+        try {
+            // Invoke the NMS ItemStack.removeComponent(DataComponentType) method.
+            // This method modifies 'this' (the NMS ItemStack) and returns the old value, which we discard.
+            `method$ItemStack$removeComponent`.invoke(item, componentType)
+        } catch (e: Exception) {
+            // Log the error if the reflection call fails.
+            e.printStackTrace()
+        }
     }
 
+
     /**
-     * Removes a specific data component from the given item and returns it as a new item, without modifying the original (from an NMS item).
+     * Removes a specific data component from a Bukkit ItemStack and returns a new, modified ItemStack.
+     * This function is safe to use as it creates a copy and does not modify the original item.
      *
-     * @param item The NMS ItemStack.
-     * @param component The component ID, e.g., `minecraft:custom_data`.
-     * @return The modified NMS ItemStack.
+     * For performance-critical scenarios involving multiple modifications, consider converting
+     * the ItemStack to its NMS representation once, performing all operations, and then converting it back.
+     * Example:
+     * ```
+     * val nmsItem = asNMSCopyMethod.invoke(null, yourBukkitItem)
+     * nmsItem.removeComponentNMS("minecraft:custom_data")
+     * nmsItem.removeComponentNMS("minecraft:map_color")
+     * val finalItem = asBukkitCopyMethod.invoke(null, nmsItem) as ItemStack
+     * ```
+     *
+     * @param item The Bukkit ItemStack to modify.
+     * @param componentId The component ID to remove, e.g., "minecraft:custom_name".
+     * @return A new, modified Bukkit ItemStack, or null if an error occurs.
      */
-    fun removeComponentNMS(item: Any, component: String): Any? {
-        return item.removeComponentNMS(component)
+    fun removeComponent(item: ItemStack, componentId: String): ItemStack? {
+        // 1. Create a modifiable NMS copy of the Bukkit ItemStack.
+        // This prevents modification of the original item stack.
+        val nmsItem = asNMSCopy(item)
+
+        // 2. Call the extension function to remove the component.
+        // This modifies the 'nmsItem' instance in-place.
+        nmsItem.removeComponentNMS(componentId)
+
+        // 3. Convert the modified NMS item back to a Bukkit ItemStack and return it.
+        return asBukkitCopy(nmsItem)
     }
+
+
+    /**
+     * Applies the component removal to an NMS ItemStack and returns the modified item.
+     *
+     * Note: This function is redundant. The `removeComponentNMSDirectly` function
+     * should be used directly on the NMS item object.
+     *
+     * @param item The NMS ItemStack object.
+     * @param componentId The component ID to remove.
+     * @return The same NMS ItemStack object that was passed in, now modified.
+     */
+    fun removeComponentNMS(item: Any, componentId: String): Any {
+        // The extension function modifies the item in-place.
+        item.removeComponentNMS(componentId)
+        // Return the same item that was modified.
+        return item
+    }
+
 
 
 }
