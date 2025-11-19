@@ -40,28 +40,3 @@ configure<JavaPluginConvention> {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
 }
-
-publishing {
-    repositories {
-        maven {
-            url = uri("https://nexus.maplex.top/repository/maven-releases/")
-            isAllowInsecureProtocol = true
-            credentials {
-                username = project.findProperty("mavenUsername")?.toString()
-                password = project.findProperty("mavenPassword")?.toString()
-            }
-            authentication {
-                create<BasicAuthentication>("basic")
-            }
-        }
-        mavenLocal()
-    }
-    publications {
-        create<MavenPublication>("maven") {
-            from(components.findByName("java"))
-            groupId = project.group.toString()
-            artifactId = rootProject.name
-            version = project.version.toString()
-        }
-    }
-}
