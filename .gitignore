@@ -1,0 +1,6 @@
+.gradle
+.github
+.kotlin
+.idea
+build
+gradle.properties
