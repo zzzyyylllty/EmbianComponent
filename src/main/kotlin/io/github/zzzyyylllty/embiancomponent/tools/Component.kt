@@ -8,6 +8,7 @@ class ComponentSetter {
      * Gets **all** data components of an item.
      * Includes unfiltered components, e.g., a sword **will** return the default component with damage=0.
      * @param item The Bukkit ItemStack.
+     * @return Map.value is JSONObject/JsonPrimitive
      */
     fun getAllComponents(item: ItemStack): Map<String, Any?> {
         return asNMSCopy(item).getComponentsNMS()
@@ -17,6 +18,7 @@ class ComponentSetter {
      * Gets **all** data components of an item **after filtering out default ones**.
      * Excludes unfiltered components, e.g., a sword **will not** return the default component with damage=0.
      * @param item The Bukkit ItemStack.
+     * @return Map.value is JSONObject/JsonPrimitive
      */
     fun getAllComponentsFiltered(item: ItemStack): Map<String, Any?> {
         return asNMSCopy(item).getComponentsNMSFiltered()

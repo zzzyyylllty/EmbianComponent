@@ -20,10 +20,13 @@ repositories {
 }
 
 dependencies {
-//    compileOnly("ink.ptms.core:v12104:12104:mapped")
-//    compileOnly("ink.ptms.core:v12104:12104:universal")
+    // Incompatible with spigot
+    // because spigot using legacy DataResult(class) paper using modern DataResult(interface).
+    //    compileOnly("ink.ptms.core:v12104:12104:mapped")
+    //    compileOnly("ink.ptms.core:v12104:12104:universal")
     compileOnly(kotlin("stdlib"))
     compileOnly("com.google.code.gson:gson:2.10.1")
+    //    compileOnly("org.spigot:spigot-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("com.mojang:datafixerupper:8.0.16")
 }
