@@ -646,8 +646,8 @@ private val `method$TypedDataComponent$value` by lazy {
 
 // ========== 优化后的主函数 ==========
 @Suppress("UNCHECKED_CAST")
-fun Any.getComponentsNMSFiltered(): Map<String, Any?> {
-    val result = mutableMapOf<String, Any?>()
+fun Any.getComponentsNMSFiltered(): Map<String, JsonElement?> {
+    val result = mutableMapOf<String, JsonElement?>()
 
     if (!`clazz$DataComponentHolder`.isInstance(this)) {
         return result
