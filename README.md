@@ -124,13 +124,13 @@ class ComponentExample {
         // This will only show components that differ from the item's default state.
         val filteredComponents = safetyComponentSetter.getAllComponentsFiltered(item)
         // Expected output might be something like: {minecraft:custom_data={test=abc}}x
-        // output Map.value is JSONObject/JsonPrimitive
+        // output Map.value is JsonObject(Map)/JsonPrimitive(Number/String)/JsonArray(List)
         println("Filtered Components: $filteredComponents")
 
         // 5. Get all components present on the item, including default ones.
         val allComponents = safetyComponentSetter.getAllComponents(item)
         // Expected output might be something like: {minecraft:custom_data={"test":"abc"}, minecraft:max_damage=528, ...}
-        // output Map.value is JSONObject/JsonPrimitive
+        // output Map.value is JsonObject(Map)/JsonPrimitive(Number/String)/JsonArray(List)
         println("All Components: $allComponents")
 
         // 6. Get a specific component's value as a Java object (e.g., a Map).
