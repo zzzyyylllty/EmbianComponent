@@ -405,6 +405,42 @@ fun Any.getComponentsNMS(): Map<String, JsonElement> {
     return result
 }
 @Suppress("UNCHECKED_CAST")
+fun Any.getComponentsJavaNMS(): Map<String, Any?> {
+    val result = mutableMapOf<String, Any?>()
+
+    if (!`clazz$DataComponentHolder`.isInstance(this)) {
+        return result
+    }
+
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val dataComponentMap = getComponentsMethod.invoke(this)!!
+
+    // 获取 iterator() 方法
+    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
+
+    while (iterator.hasNext()) {
+        val typedDataComponent = iterator.next()
+
+        // typedDataComponent 需要通过反射访问 type() 和 value()
+        val typeMethod = typedDataComponent.javaClass.getMethod("type")
+        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+
+        val componentType = typeMethod.invoke(typedDataComponent)
+        val componentValue = valueMethod.invoke(typedDataComponent)
+
+        val id = componentType.toString()
+
+        val codec = `method$DataComponentType$codec`.invoke(componentType) as Codec<Any>
+        val encodedResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
+        val element = encodedResult.result().orElse(null) ?: continue
+
+        result[id] = element
+    }
+
+    return result
+}
+@Suppress("UNCHECKED_CAST")
 fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
     val result = mutableMapOf<String, Any?>()
 
@@ -654,7 +690,67 @@ fun Any.getComponentsNMSFiltered(): Map<String, Any?> {
         // 获取 codec（使用缓存的方法查找逻辑）
         val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
 
-        // 使用 JAVA DynamicOps 编码
+        // 使用 JSON DynamicOps 编码
+        val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
+        if (encodedResultJava.isError) {
+            continue
+        }
+        val componentJavaObject = encodedResultJava.result().orElse(null) ?: continue
+
+        result[resourceLocationStr] = componentJavaObject
+    }
+
+    return result
+}
+
+
+// ========== 优化后的主函数 ==========
+@Suppress("UNCHECKED_CAST")
+fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
+    val result = mutableMapOf<String, Any?>()
+
+    if (!`clazz$DataComponentHolder`.isInstance(this)) {
+        return result
+    }
+
+    // 使用缓存的反射方法
+    val patch = `method$ItemStack$getComponentsPatch`.invoke(this) ?: return result
+    val item = `method$ItemStack$getItem`.invoke(this) ?: return result
+    val prototype = `method$Item$components`.invoke(item) ?: return result
+
+    // 获取 patch.entrySet()
+    val entrySet = `method$DataComponentPatch$entrySet`.invoke(patch) as Set<*>
+
+    for (entryObj in entrySet) {
+        val entry = entryObj as? Map.Entry<*, *> ?: continue
+
+        val componentTypeRaw = entry.key ?: continue
+        val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
+
+        // 转换资源位置字符串
+        val resourceLocationStr = componentTypeRaw.toString()
+        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+
+        // 从注册表获取组件类型
+        val componentTypeOptional = `method$Registry$getValue`.invoke(
+            `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
+            resourceLocation
+        ) ?: continue
+        val componentType = unwrapValue(componentTypeOptional)
+
+        // 比较原型值，过滤未修改的组件
+        val prototypeTyped = `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+        if (prototypeTyped != null) {
+            val prototypeValue = `method$TypedDataComponent$value`.invoke(prototypeTyped)
+            if (prototypeValue == componentValue) {
+                continue
+            }
+        }
+
+        // 获取 codec（使用缓存的方法查找逻辑）
+        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
+
+        // 使用 JSON DynamicOps 编码
         val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
         if (encodedResultJava.isError) {
             continue
