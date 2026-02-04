@@ -669,7 +669,18 @@ fun Any.getComponentsNMSFiltered(): Map<String, JsonElement?> {
 
         // 转换资源位置字符串
         val resourceLocationStr = componentTypeRaw.toString()
-        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+        // 672 val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+        val resourceLocation = when {
+            `clazz$ResourceLocation`.isInstance(componentTypeRaw) -> componentTypeRaw
+            else -> {
+                val str = componentTypeRaw.toString()
+                try {
+                    `method$ResourceLocation$tryParse`.invoke(null, str)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        } ?: continue
 
         // 从注册表获取组件类型
         val componentTypeOptional = `method$Registry$getValue`.invoke(
