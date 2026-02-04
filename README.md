@@ -7,7 +7,7 @@ repositories {
 
 dependencies {
     implementation("io.github.zzzyyylllty:EmbianComponent:VERSION")
-    // If this not working use taboo("com.github.zzzyyylllty:EmbianComponent:VERSION")
+    // If this not working use implementation("com.github.zzzyyylllty:EmbianComponent:VERSION")
 }
 ```
 
