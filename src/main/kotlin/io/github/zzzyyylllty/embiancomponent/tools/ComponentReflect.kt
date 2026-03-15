@@ -643,79 +643,195 @@ private val `method$TypedDataComponent$value` by lazy {
     val typedClass = getClazz(assembleMCClass("core.component.TypedDataComponent"))!!
     typedClass.getMethod("value")
 }
-
-// ========== 优化后的主函数 ==========
+//
+//// ========== 优化后的主函数 ==========
+//@Suppress("UNCHECKED_CAST")
+//fun Any.getComponentsNMSFiltered(): Map<String, JsonElement?> {
+//    val result = mutableMapOf<String, JsonElement?>()
+//
+//    if (!`clazz$DataComponentHolder`.isInstance(this)) {
+//        return result
+//    }
+//
+//    // 使用缓存的反射方法
+//    val patch = `method$ItemStack$getComponentsPatch`.invoke(this) ?: return result
+//    val item = `method$ItemStack$getItem`.invoke(this) ?: return result
+//    val prototype = `method$Item$components`.invoke(item) ?: return result
+//
+//    // 获取 patch.entrySet()
+//    val entrySet = `method$DataComponentPatch$entrySet`.invoke(patch) as Set<*>
+//
+//    for (entryObj in entrySet) {
+//        val entry = entryObj as? Map.Entry<*, *> ?: continue
+//
+//        val componentTypeRaw = entry.key ?: continue
+//        val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
+//
+//        // 转换资源位置字符串
+//        val resourceLocationStr = componentTypeRaw.toString()
+//        // 672 val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+//        val resourceLocation = when {
+//            `clazz$ResourceLocation`.isInstance(componentTypeRaw) -> componentTypeRaw
+//            else -> {
+//                val str = componentTypeRaw.toString()
+//                try {
+//                    `method$ResourceLocation$tryParse`.invoke(null, str)
+//                } catch (e: Exception) {
+//                    null
+//                }
+//            }
+//        } ?: continue
+//
+//        // 从注册表获取组件类型
+//        val componentTypeOptional = `method$Registry$getValue`.invoke(
+//            `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
+//            resourceLocation
+//        ) ?: continue
+//        val componentType = unwrapValue(componentTypeOptional)
+//
+//        // 比较原型值，过滤未修改的组件
+//        val prototypeTyped = `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+//        if (prototypeTyped != null) {
+//            val prototypeValue = `method$TypedDataComponent$value`.invoke(prototypeTyped)
+//            if (prototypeValue == componentValue) {
+//                continue
+//            }
+//        }
+//
+//        // 获取 codec（使用缓存的方法查找逻辑）
+//        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
+//
+//        // 使用 JSON DynamicOps 编码
+//        val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
+//        if (encodedResultJava.isError) {
+//            continue
+//        }
+//        val componentJavaObject = encodedResultJava.result().orElse(null) ?: continue
+//
+//        result[resourceLocationStr] = componentJavaObject
+//    }
+//
+//    return result
+//}
 @Suppress("UNCHECKED_CAST")
-fun Any.getComponentsNMSFiltered(): Map<String, JsonElement?> {
-    val result = mutableMapOf<String, JsonElement?>()
+fun Any.getComponentsNMSFiltered(): Map<String, JsonElement> {
+    val result = mutableMapOf<String, JsonElement>()
 
     if (!`clazz$DataComponentHolder`.isInstance(this)) {
         return result
     }
 
-    // 使用缓存的反射方法
-    val patch = `method$ItemStack$getComponentsPatch`.invoke(this) ?: return result
+    // 1. 获取物品原型的默认组件 Map（用于比较）
     val item = `method$ItemStack$getItem`.invoke(this) ?: return result
     val prototype = `method$Item$components`.invoke(item) ?: return result
 
-    // 获取 patch.entrySet()
-    val entrySet = `method$DataComponentPatch$entrySet`.invoke(patch) as Set<*>
+    // 2. 获取 ItemStack 全量组件（已合并 patch）
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val dataComponentMap = getComponentsMethod.invoke(this) ?: return result
 
-    for (entryObj in entrySet) {
-        val entry = entryObj as? Map.Entry<*, *> ?: continue
+    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
-        val componentTypeRaw = entry.key ?: continue
-        val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
+    while (iterator.hasNext()) {
+        val typedDataComponent = iterator.next()
 
-        // 转换资源位置字符串
-        val resourceLocationStr = componentTypeRaw.toString()
-        // 672 val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
-        val resourceLocation = when {
-            `clazz$ResourceLocation`.isInstance(componentTypeRaw) -> componentTypeRaw
-            else -> {
-                val str = componentTypeRaw.toString()
-                try {
-                    `method$ResourceLocation$tryParse`.invoke(null, str)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-        } ?: continue
+        val typeMethod = typedDataComponent.javaClass.getMethod("type")
+        val valueMethod = typedDataComponent.javaClass.getMethod("value")
 
-        // 从注册表获取组件类型
-        val componentTypeOptional = `method$Registry$getValue`.invoke(
-            `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
-            resourceLocation
-        ) ?: continue
-        val componentType = unwrapValue(componentTypeOptional)
+        val componentType = typeMethod.invoke(typedDataComponent) ?: continue
+        val componentValue = valueMethod.invoke(typedDataComponent) ?: continue
 
-        // 比较原型值，过滤未修改的组件
-        val prototypeTyped = `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+        // 3. 与原型比较：如果原型中有相同值，则过滤掉
+        val prototypeTyped = try {
+            `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+        } catch (e: Exception) {
+            null
+        }
+
         if (prototypeTyped != null) {
-            val prototypeValue = `method$TypedDataComponent$value`.invoke(prototypeTyped)
+            val prototypeValue = try {
+                `method$TypedDataComponent$value`.invoke(prototypeTyped)
+            } catch (e: Exception) {
+                null
+            }
+            // 原型值与当前值相同 → 跳过（未修改）
             if (prototypeValue == componentValue) {
                 continue
             }
         }
 
-        // 获取 codec（使用缓存的方法查找逻辑）
-        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
+        // 4. 序列化为 JSON
+        val codec = getCodecForComponentType(componentType) ?: continue
 
-        // 使用 JSON DynamicOps 编码
-        val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
-        if (encodedResultJava.isError) {
-            continue
-        }
-        val componentJavaObject = encodedResultJava.result().orElse(null) ?: continue
+        val encodedResult = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
+        if (encodedResult.isError) continue
 
-        result[resourceLocationStr] = componentJavaObject
+        val jsonElement = encodedResult.result().orElse(null) ?: continue
+        result[componentType.toString()] = jsonElement
     }
 
     return result
 }
 
+//// ========== 优化后的主函数 ==========
+//@Suppress("UNCHECKED_CAST")
+//fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
+//    val result = mutableMapOf<String, Any?>()
+//
+//    if (!`clazz$DataComponentHolder`.isInstance(this)) {
+//        return result
+//    }
+//
+//    // 使用缓存的反射方法
+//    val patch = `method$ItemStack$getComponentsPatch`.invoke(this) ?: return result
+//    val item = `method$ItemStack$getItem`.invoke(this) ?: return result
+//    val prototype = `method$Item$components`.invoke(item) ?: return result
+//
+//    // 获取 patch.entrySet()
+//    val entrySet = `method$DataComponentPatch$entrySet`.invoke(patch) as Set<*>
+//
+//    for (entryObj in entrySet) {
+//        val entry = entryObj as? Map.Entry<*, *> ?: continue
+//
+//        val componentTypeRaw = entry.key ?: continue
+//        val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
+//
+//        // 转换资源位置字符串
+//        val resourceLocationStr = componentTypeRaw.toString()
+//        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+//
+//        // 从注册表获取组件类型
+//        val componentTypeOptional = `method$Registry$getValue`.invoke(
+//            `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
+//            resourceLocation
+//        ) ?: continue
+//        val componentType = unwrapValue(componentTypeOptional)
+//
+//        // 比较原型值，过滤未修改的组件
+//        val prototypeTyped = `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+//        if (prototypeTyped != null) {
+//            val prototypeValue = `method$TypedDataComponent$value`.invoke(prototypeTyped)
+//            if (prototypeValue == componentValue) {
+//                continue
+//            }
+//        }
+//
+//        // 获取 codec（使用缓存的方法查找逻辑）
+//        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
+//
+//        // 使用 JSON DynamicOps 编码
+//        val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
+//        if (encodedResultJava.isError) {
+//            continue
+//        }
+//        val componentJavaObject = encodedResultJava.result().orElse(null) ?: continue
+//
+//        result[resourceLocationStr] = componentJavaObject
+//    }
+//
+//    return result
+//}
 
-// ========== 优化后的主函数 ==========
 @Suppress("UNCHECKED_CAST")
 fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
     val result = mutableMapOf<String, Any?>()
@@ -724,56 +840,47 @@ fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
         return result
     }
 
-    // 使用缓存的反射方法
-    val patch = `method$ItemStack$getComponentsPatch`.invoke(this) ?: return result
     val item = `method$ItemStack$getItem`.invoke(this) ?: return result
     val prototype = `method$Item$components`.invoke(item) ?: return result
 
-    // 获取 patch.entrySet()
-    val entrySet = `method$DataComponentPatch$entrySet`.invoke(patch) as Set<*>
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val dataComponentMap = getComponentsMethod.invoke(this) ?: return result
 
-    for (entryObj in entrySet) {
-        val entry = entryObj as? Map.Entry<*, *> ?: continue
+    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
-        val componentTypeRaw = entry.key ?: continue
-        val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
+    while (iterator.hasNext()) {
+        val typedDataComponent = iterator.next()
 
-        // 转换资源位置字符串
-        val resourceLocationStr = componentTypeRaw.toString()
-        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+        val typeMethod = typedDataComponent.javaClass.getMethod("type")
+        val valueMethod = typedDataComponent.javaClass.getMethod("value")
 
-        // 从注册表获取组件类型
-        val componentTypeOptional = `method$Registry$getValue`.invoke(
-            `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
-            resourceLocation
-        ) ?: continue
-        val componentType = unwrapValue(componentTypeOptional)
+        val componentType = typeMethod.invoke(typedDataComponent) ?: continue
+        val componentValue = valueMethod.invoke(typedDataComponent) ?: continue
 
-        // 比较原型值，过滤未修改的组件
-        val prototypeTyped = `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+        // 与原型比较过滤
+        val prototypeTyped = try {
+            `method$DataComponentMap$getTyped`.invoke(prototype, componentType)
+        } catch (e: Exception) { null }
+
         if (prototypeTyped != null) {
-            val prototypeValue = `method$TypedDataComponent$value`.invoke(prototypeTyped)
-            if (prototypeValue == componentValue) {
-                continue
-            }
+            val prototypeValue = try {
+                `method$TypedDataComponent$value`.invoke(prototypeTyped)
+            } catch (e: Exception) { null }
+            if (prototypeValue == componentValue) continue
         }
 
-        // 获取 codec（使用缓存的方法查找逻辑）
-        val codec = componentType?.let { getCodecForComponentType(it) } ?: continue
+        val codec = getCodecForComponentType(componentType) ?: continue
 
-        // 使用 JSON DynamicOps 编码
-        val encodedResultJava = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
-        if (encodedResultJava.isError) {
-            continue
-        }
-        val componentJavaObject = encodedResultJava.result().orElse(null) ?: continue
+        val encodedResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
+        if (encodedResult.isError) continue
 
-        result[resourceLocationStr] = componentJavaObject
+        val element = encodedResult.result().orElse(null) ?: continue
+        result[componentType.toString()] = element
     }
 
     return result
 }
-
 // ========== 辅助函数：获取 Codec（带缓存） ==========
 private val codecCache = mutableMapOf<Any, Codec<Any>>()
 
