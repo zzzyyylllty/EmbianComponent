@@ -464,7 +464,7 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
         val resourceLocationStr = componentTypeRaw.toString()
 
         // 用注册表去获取对应完整组件类型实例，避免版本差异或者动态生成的子类导致反射异常
-        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr)
+        val resourceLocation = safeParseResourceLocation(resourceLocationStr)
         val componentTypeOptional = `method$Registry$getValue`.invoke(`instance$BuiltInRegistries$DATA_COMPONENT_TYPE`, resourceLocation)
             ?: continue
         val componentType = unwrapValue(componentTypeOptional) ?: continue
@@ -564,7 +564,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
         val componentValue = entry.value?.let { unwrapValue(it) } ?: continue
 
         val resourceLocationStr = componentTypeRaw.toString()
-        val resourceLocation = `method$ResourceLocation$tryParse`.invoke(null, resourceLocationStr) ?: continue
+        val resourceLocation = safeParseResourceLocation(resourceLocationStr) ?: continue
 
         val componentTypeOptional = `method$Registry$getValue`.invoke(
             `instance$BuiltInRegistries$DATA_COMPONENT_TYPE`,
@@ -928,12 +928,28 @@ fun Any.removeComponentNMS(componentId: String): Any? {
 }
 
 
+private fun safeParseResourceLocation(str: String): Any? {
+    return try {
+        if (str.contains(':')) {
+            val colonIndex = str.indexOf(':')
+            val namespace = str.substring(0, colonIndex)
+            val path = str.substring(colonIndex + 1)
+            `method$ResourceLocation$fromNamespaceAndPath`.invoke(null, namespace, path)
+        } else {
+            `method$ResourceLocation$tryParse`.invoke(null, str)
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun ensureDataComponentType(type: Any): Any? {
     val rawResult = when {
         `clazz$DataComponentType`.isInstance(type) -> type
         `clazz$ResourceLocation`.isInstance(type) -> `method$Registry$getValue`.invoke(`instance$BuiltInRegistries$DATA_COMPONENT_TYPE`, type)
         else -> {
-            val rl = `method$ResourceLocation$tryParse`.invoke(null, type.toString())
+            val typeStr = type.toString()
+            val rl = safeParseResourceLocation(typeStr)
             `method$Registry$getValue`.invoke(`instance$BuiltInRegistries$DATA_COMPONENT_TYPE`, rl)
         }
     }
