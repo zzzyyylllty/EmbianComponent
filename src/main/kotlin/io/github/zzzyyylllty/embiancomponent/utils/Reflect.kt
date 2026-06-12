@@ -58,6 +58,21 @@ fun getClazz(className: String): Class<*>? {
     }
 }
 
+/**
+ * Try multiple class names, for cross-version compatibility (e.g. ResourceLocation → Identifier).
+ * Returns the first successfully loaded class, or null if all fail.
+ */
+fun resolveMCClass(vararg candidates: String): Class<*>? {
+    for (candidate in candidates) {
+        try {
+            return Class.forName(MC_PREFIX + candidate)
+        } catch (_: ClassNotFoundException) {
+            continue
+        }
+    }
+    return null
+}
+
 fun getDeclaredField(clazz: Class<*>, type: Class<*>, index: Int): Field? =
     clazz.declaredFields
         .filter { it.type == type }

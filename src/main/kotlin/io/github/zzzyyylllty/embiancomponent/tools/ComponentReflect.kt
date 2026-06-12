@@ -15,17 +15,15 @@ import java.util.Optional
 
 val `clazz$ResourceLocation` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("resources.ResourceLocation")
-        )
+        // 1.21.4: resources.ResourceLocation → 26.1.2+: resources.Identifier
+        resolveMCClass("resources.ResourceLocation", "resources.Identifier")
     )!!
 }
 
 val `clazz$Registry` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("core.IRegistryWritable")
-        )
+        // 1.21.4: core.IRegistryWritable → 26.1.2+: core.Registry
+        resolveMCClass("core.IRegistryWritable", "core.Registry", "core.WritableRegistry")
     )!!
 }
 
