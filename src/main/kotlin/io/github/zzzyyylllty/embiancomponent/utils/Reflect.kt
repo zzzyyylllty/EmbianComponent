@@ -1,5 +1,6 @@
 package io.github.zzzyyylllty.embiancomponent.utils
 
+import org.bukkit.Bukkit
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -12,9 +13,39 @@ fun assembleMCClass(className: String): String {
     return MC_PREFIX + className
 }
 
+/**
+ * 解析 craftbukkit 类全名。
+ * Paper 1.21.4+ 的包名没有版本后缀（org.bukkit.craftbukkit.inventory...），
+ * 而 Spigot 等核心带版本后缀（org.bukkit.craftbukkit.v1_21_R3.inventory...）。
+ * 优先尝试无后缀，失败后从服务端实现类包名提取版本后缀。
+ */
 fun assembleCBClass(className: String): String {
-    // 因为是paper 1.21.4+所以说不考虑v1_x_R_x
-    return CB_PREFIX + className
+    return resolveCBClass(className) ?: (CB_PREFIX + className)
+}
+
+fun resolveCBClass(className: String): String? {
+    val noSuffix = CB_PREFIX + className
+    if (classExists(noSuffix)) return noSuffix
+    val suffix = craftbukkitVersionSuffix
+    if (suffix.isNotEmpty()) {
+        val withSuffix = CB_PREFIX + suffix + "." + className
+        if (classExists(withSuffix)) return withSuffix
+    }
+    return null
+}
+
+private object ClassLoaderHolder
+
+private fun classExists(name: String): Boolean =
+    // initialize=false：只加载类，不触发静态初始化
+    runCatching { Class.forName(name, false, ClassLoaderHolder::class.java.classLoader) }.isSuccess
+
+private val craftbukkitVersionSuffix: String by lazy {
+    runCatching {
+        // 用类名解析包名：Class.getPackage() 在部分类加载器环境下会返回 null
+        val pkg = Bukkit.getServer().javaClass.name.substringBeforeLast('.')
+        if (pkg.startsWith(CB_PREFIX)) pkg.removePrefix(CB_PREFIX).substringBefore('.') else ""
+    }.getOrDefault("")
 }
 
 

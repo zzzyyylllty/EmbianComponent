@@ -18,8 +18,9 @@ object EmbianComponent {
     }
 
     val versionId: Int by lazy {
+        // 无补丁版本号（如 "1.21"）只有两段，缺省补丁按 0 处理
         val split = runningVersion.split(".")
-        split[0].toInt()*10000 + split[1].toInt()*100 + split[2].toInt()
+        split[0].toInt() * 10000 + (split.getOrNull(1)?.toInt() ?: 0) * 100 + (split.getOrNull(2)?.toInt() ?: 0)
     }
 
     val SafetyComponentSetter by lazy {

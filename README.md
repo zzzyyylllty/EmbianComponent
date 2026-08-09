@@ -27,7 +27,7 @@ dependencies {
 
 ## Usage
 
-We only support **Paper**.
+Support **Paper** and **Spigot** (MC 1.20.5+).
 
 ### Java
 ```java

@@ -1,13 +1,9 @@
 package io.github.zzzyyylllty.embiancomponent.tools
 
 import com.google.gson.JsonElement
-import com.mojang.serialization.Codec
-import com.mojang.serialization.DataResult
-import com.mojang.serialization.DynamicOps
-import com.mojang.serialization.JavaOps
-import com.mojang.serialization.JsonOps
 import io.github.zzzyyylllty.embiancomponent.utils.*
 import org.bukkit.inventory.ItemStack
+import java.lang.reflect.Method
 import java.util.Objects.requireNonNull
 import java.util.Optional
 //import net.minecraft.core.component.DataComponentType
@@ -104,7 +100,7 @@ val `clazz$HolderLookup$Provider` by lazy {
 val `method$RegistryOps$create` by lazy {
     requireNonNull(
         getMethod(
-            `clazz$RegistryOps`, `clazz$RegistryOps`, 0, DynamicOps::class.java, `clazz$HolderLookup$Provider`
+            `clazz$RegistryOps`, `clazz$RegistryOps`, 0, `clazz$DynamicOps`, `clazz$HolderLookup$Provider`
         )
     )!!
 }
@@ -140,18 +136,15 @@ val `instance$MinecraftServer$registryAccess` by lazy {
     `method$MinecraftServer$registryAccess`.invoke(`instance$MinecraftServer$SERVER`)!!
 }
 val `method$DataComponentType$codec` by lazy {
-    requireNonNull(
-        getMethod(
-            `clazz$DataComponentType`, Codec::class.java, 0
-        )
-    )!!
+    // codec() 与 codecOrThrow() 都返回 Codec，按名字精确查找
+    requireNonNull(`clazz$DataComponentType`.getMethod("codec"))!!
 }
 
 val `method$DataComponentHolder$getDataComponentType` by lazy {
+    // 按名字精确查找：getTyped(DataComponentType) 与 get(DataComponentType) 参数/返回类型相同，
+    // 按返回类型+索引匹配可能在 Spigot 上拿到 getTyped（返回 Optional），必须按名字
     requireNonNull(
-        getMethod(
-            `clazz$DataComponentHolder`, Any::class.java, 0, `clazz$DataComponentType`
-        )
+        `clazz$DataComponentHolder`.getMethod("get", `clazz$DataComponentType`)
     )!!
 }
 
@@ -164,10 +157,9 @@ val `clazz$ItemStack` by lazy {
 }
 
 val `method$ItemStack$setComponent` by lazy {
+    // 按名字精确查找：旧版还有同签名的 set(DataComponentType, T)
     requireNonNull(
-        getMethod(
-            `clazz$ItemStack`, Any::class.java, 0, `clazz$DataComponentType`, Any::class.java
-        )
+        `clazz$ItemStack`.getMethod("setComponent", `clazz$DataComponentType`, Any::class.java)
     )!!
 }
 
@@ -175,14 +167,6 @@ val `clazz$CraftItemStack` by lazy {
     requireNonNull(
         getClazz(
             assembleCBClass("inventory.CraftItemStack")
-        )
-    )!!
-}
-
-val `field$CraftItemStack$handle` by lazy {
-    requireNonNull(
-        getDeclaredField(
-            `clazz$CraftItemStack`, `clazz$ItemStack`, 0
         )
     )!!
 }
@@ -196,40 +180,88 @@ val `clazz$NbtOps` by lazy {
 }
 
 val `field$NbtOps$INSTANCE` by lazy {
+    // 按名字查找：NbtOps 有 INSTANCE 与 LEGACY_INSTANCE 两个同类型静态字段，按类型+索引可能拿错
     requireNonNull(
-        getDeclaredField(
-            `clazz$NbtOps`, `clazz$NbtOps`, 0
-        )
+        getDeclaredField(`clazz$NbtOps`, "INSTANCE")
     )!!
 }
 
 val `instance$NbtOps$INSTANCE` by lazy {
     `field$NbtOps$INSTANCE`.get(null)!!
 }
+
+// ========== DFU 反射层 ==========
+// DataResult 的 class→interface 变化发生在 DFU 8.0.16（MC 1.21.2），与服务端核心无关：
+// MC ≤ 1.21.1（Paper/Spigot 都一样）是 class，MC ≥ 1.21.2 是 interface。
+// 直接引用会因字节码指令差异（INVOKEINTERFACE vs INVOKEVIRTUAL）抛 IncompatibleClassChangeError，
+// 因此 com.mojang.serialization 的一切调用都走反射，两种形态都能工作。
+val `clazz$Codec` by lazy { requireNonNull(getClazz("com.mojang.serialization.Codec"))!! }
+val `clazz$DataResult` by lazy { requireNonNull(getClazz("com.mojang.serialization.DataResult"))!! }
+val `clazz$DynamicOps` by lazy { requireNonNull(getClazz("com.mojang.serialization.DynamicOps"))!! }
+
+val `instance$JavaOps$INSTANCE` by lazy {
+    val clazz = requireNonNull(getClazz("com.mojang.serialization.JavaOps"))!!
+    clazz.getField("INSTANCE").get(null)!!
+}
+val `instance$JsonOps$INSTANCE` by lazy {
+    val clazz = requireNonNull(getClazz("com.mojang.serialization.JsonOps"))!!
+    clazz.getField("INSTANCE").get(null)!!
+}
+
+val `method$Codec$encodeStart` by lazy {
+    // encodeStart 与 parse 擦除后签名相同（(DynamicOps, Object) → DataResult），
+    // 按返回类型+索引匹配可能拿错，必须按名字精确查找
+    requireNonNull(
+        `clazz$Codec`.getMethod("encodeStart", `clazz$DynamicOps`, Any::class.java)
+    )!!
+}
+val `method$Codec$parse` by lazy {
+    requireNonNull(
+        `clazz$Codec`.getMethod("parse", `clazz$DynamicOps`, Any::class.java)
+    )!!
+}
+val `method$DataResult$result` by lazy {
+    // 不能用 getMethod(返回类型) 匹配：result() 与 error() 都返回 Optional，必须按名字精确查找
+    requireNonNull(`clazz$DataResult`.getMethod("result"))!!
+}
+
+fun codecEncodeStart(codec: Any, ops: Any, value: Any): Any =
+    `method$Codec$encodeStart`.invoke(codec, ops, value)!!
+
+fun codecParse(codec: Any, ops: Any, value: Any): Any =
+    `method$Codec$parse`.invoke(codec, ops, value)!!
+
 @Suppress("UNCHECKED_CAST")
+fun <R> dataResultResult(dataResult: Any): Optional<R> =
+    `method$DataResult$result`.invoke(dataResult) as Optional<R>
+
+fun dataResultIsError(dataResult: Any): Boolean {
+    // 注意：DFU 8.0.16 前后（class/interface）的 DataResult 都没有 isError() 方法，
+    // 统一用 result() 判断（错误时 Optional 为空）
+    return !dataResultResult<Any>(dataResult).isPresent
+}
+
 val `instance$DynamicOps$NBT` by lazy {
     `method$RegistryOps$create`.invoke(
         null,
         `instance$NbtOps$INSTANCE`,
         `instance$MinecraftServer$registryAccess`
-    )!! as DynamicOps<Any>
+    )!!
 }
 
-@Suppress("UNCHECKED_CAST")
 val `instance$DynamicOps$JAVA` by lazy {
     `method$RegistryOps$create`.invoke(
         null,
-        JavaOps.INSTANCE,
+        `instance$JavaOps$INSTANCE`,
         `instance$MinecraftServer$registryAccess`
-    )!! as DynamicOps<Any>
+    )!!
 }
-@Suppress("UNCHECKED_CAST")
 val `instance$DynamicOps$JSON` by lazy {
     `method$RegistryOps$create`.invoke(
         null,
-        JsonOps.INSTANCE,
+        `instance$JsonOps$INSTANCE`,
         `instance$MinecraftServer$registryAccess`
-    )!! as DynamicOps<JsonElement>
+    )!!
 }
 
 val `clazz$Tag` by lazy {
@@ -249,45 +281,33 @@ val `method$ResourceLocation$tryParse` by lazy {
 }
 
 val `method$ItemStack$removeComponent` by lazy {
+    // 按名字精确查找：旧版还有同签名的 remove(DataComponentType)
     requireNonNull(
-        getMethod(
-            `clazz$ItemStack`,
-            // 1. 返回类型：由于类型擦除，泛型 T 变为 Object
-            Any::class.java,
-            // 2. 索引：在所有匹配的方法中，它是第 0 个（也是唯一一个）
-            0,
-            // 3. 参数类型列表
-            `clazz$DataComponentType`
-        )
+        `clazz$ItemStack`.getMethod("removeComponent", `clazz$DataComponentType`)
     )!!
 }
 
 
-val holderClass by lazy { getClazz("net.minecraft.core.Holder")!! }
-val holderMethod by lazy { holderClass.getDeclaredMethod("get") }
-
 @Suppress("UNCHECKED_CAST")
-fun <T> getComponent(itemStack: Any, type: Any, ops: DynamicOps<T>): Optional<T> {
-    val res = ensureDataComponentType(type)
-    val codec = `method$DataComponentType$codec`.invoke(res) as Codec<T>
+fun <T> getComponent(itemStack: Any, type: Any, ops: Any): Optional<T> {
+    val res = ensureDataComponentType(type) ?: return Optional.empty<T>() as Optional<T>
+    val codec = `method$DataComponentType$codec`.invoke(res)!!
     val componentData = `method$DataComponentHolder$getDataComponentType`.invoke(itemStack, res)
         ?: return Optional.empty<T>() as Optional<T>
-    val castComponentData = componentData as T
-    val dataResult = codec.encodeStart(ops, castComponentData)
-    return dataResult.result()
+    val dataResult = codecEncodeStart(codec, ops, componentData)
+    return dataResultResult(dataResult)
 }
 
 
-@Suppress("UNCHECKED_CAST")
-fun setComponentInternal(itemStack: Any, type: Any, ops: DynamicOps<*>, value: Any) {
+fun setComponentInternal(itemStack: Any, type: Any, ops: Any, value: Any) {
     val res = ensureDataComponentType(type)
     if (res == null) {
         return // Component not exist
     }
-    val codec = `method$DataComponentType$codec`.invoke(res) as Codec<Any>
-    val result = codec.parse(ops as DynamicOps<Any>, value)
-    if (result.isError) throw IllegalArgumentException(result.toString())
-    result.result().ifPresent {
+    val codec = `method$DataComponentType$codec`.invoke(res)!!
+    val result = codecParse(codec, ops, value)
+    if (dataResultIsError(result)) throw IllegalArgumentException(result.toString())
+    dataResultResult<Any>(result).ifPresent {
         `method$ItemStack$setComponent`.invoke(itemStack, res, it)
     }
 }
@@ -317,16 +337,16 @@ fun removeComponentInternal(itemStack: Any, type: Any, value: Any) {
 
 @Suppress("UNCHECKED_CAST")
 fun <T> getJavaComponent(itemStack: Any, type: Any): Optional<T> {
-    return getComponent(itemStack, type, `instance$DynamicOps$JAVA`) as Optional<T>
+    return getComponent<T>(itemStack, type, `instance$DynamicOps$JAVA`)
 }
 
 
 fun getJsonComponent(itemStack: Any, type: Any): Optional<JsonElement> {
-    return getComponent(itemStack, type, `instance$DynamicOps$JSON`)
+    return getComponent<JsonElement>(itemStack, type, `instance$DynamicOps$JSON`)
 }
 
 fun getNBTComponent(itemStack: Any, type: Any): Optional<Any> {
-    return getComponent(itemStack, type, `instance$DynamicOps$NBT`)
+    return getComponent<Any>(itemStack, type, `instance$DynamicOps$NBT`)
 }
 
 fun removeComponent(itemStack: Any, type: Any) {
@@ -393,9 +413,9 @@ fun Any.getComponentsNMS(): Map<String, JsonElement> {
 
         val id = componentType.toString()
 
-        val codec = `method$DataComponentType$codec`.invoke(componentType) as Codec<Any>
-        val encodedResult = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
-        val jsonElement = encodedResult.result().orElse(null) ?: continue
+        val codec = `method$DataComponentType$codec`.invoke(componentType)!!
+        val encodedResult = codecEncodeStart(codec, `instance$DynamicOps$JSON`, componentValue)
+        val jsonElement = dataResultResult<JsonElement>(encodedResult).orElse(null) ?: continue
 
         result[id] = jsonElement
     }
@@ -429,9 +449,9 @@ fun Any.getComponentsJavaNMS(): Map<String, Any?> {
 
         val id = componentType.toString()
 
-        val codec = `method$DataComponentType$codec`.invoke(componentType) as Codec<Any>
-        val encodedResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
-        val element = encodedResult.result().orElse(null) ?: continue
+        val codec = `method$DataComponentType$codec`.invoke(componentType)!!
+        val encodedResult = codecEncodeStart(codec, `instance$DynamicOps$JAVA`, componentValue)
+        val element = dataResultResult<Any>(encodedResult).orElse(null) ?: continue
 
         result[id] = element
     }
@@ -474,32 +494,24 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
         println("expected clazz: ${`clazz$DataComponentType`.name}")
         println("isInstance: ${`clazz$DataComponentType`.isInstance(componentType)}")
 
-        val codecMethod = try {
-            componentType.javaClass.getDeclaredMethod("codec")
-        } catch (_: NoSuchMethodException) {
-            componentType.javaClass.getDeclaredMethod("codecOrThrow") // 备用
-        }
-        codecMethod.isAccessible = true
-
-        val codec = codecMethod.invoke(componentType) as Codec<Any>
-
+        val codec = findCodecMethod(componentType)?.invoke(componentType) ?: continue
 
         // 序列化当前数据
-        val encodedResult = codec.encodeStart(`instance$DynamicOps$NBT`, componentValue)
-        if (encodedResult is DataResult<*>) continue
-        val currentNbtTag = encodedResult.result().orElse(null) ?: continue
+        val encodedResult = codecEncodeStart(codec, `instance$DynamicOps$NBT`, componentValue)
+        if (dataResultIsError(encodedResult)) continue
+        val currentNbtTag = dataResultResult<Any>(encodedResult).orElse(null) ?: continue
 
         // 比较默认值，反序列化空Json
         val emptyJson = com.google.gson.JsonObject()
-        val defaultParseResult = codec.parse(`instance$DynamicOps$JSON`, emptyJson)
-        val defaultValue = if (!defaultParseResult.isError)
-            defaultParseResult.result().orElse(null)
+        val defaultParseResult = codecParse(codec, `instance$DynamicOps$JSON`, emptyJson)
+        val defaultValue = if (!dataResultIsError(defaultParseResult))
+            dataResultResult<Any>(defaultParseResult).orElse(null)
         else null
 
         if (defaultValue != null) {
-            val defaultEncoded = codec.encodeStart(`instance$DynamicOps$NBT`, defaultValue)
-            if (!defaultEncoded.isError) {
-                val defaultNbtTag = defaultEncoded.result().orElse(null)
+            val defaultEncoded = codecEncodeStart(codec, `instance$DynamicOps$NBT`, defaultValue)
+            if (!dataResultIsError(defaultEncoded)) {
+                val defaultNbtTag = dataResultResult<Any>(defaultEncoded).orElse(null)
                 if (defaultNbtTag != null && defaultNbtTag == currentNbtTag) {
                     // 当前组件等价于默认值，过滤掉
                     continue
@@ -508,9 +520,9 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
         }
 
         // 转换NBT数据为Java
-        val jsonResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
-        if (jsonResult.isError) continue
-        val componentJson = jsonResult.result().orElse(null) ?: continue
+        val jsonResult = codecEncodeStart(codec, `instance$DynamicOps$JAVA`, componentValue)
+        if (dataResultIsError(jsonResult)) continue
+        val componentJson = dataResultResult<Any>(jsonResult).orElse(null) ?: continue
 
         result[resourceLocationStr] = componentJson
     }
@@ -588,25 +600,18 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
             }
         }
 
-        val codecMethod = try {
-            componentType.javaClass.getDeclaredMethod("codec")
-        } catch (e: NoSuchMethodException) {
-            componentType.javaClass.getDeclaredMethod("codecOrThrow")
-        }
-        codecMethod.isAccessible = true
-        val codec = codecMethod.invoke(componentType) as Codec<Any>
+        val codec = findCodecMethod(componentType)?.invoke(componentType) ?: continue
 
-        val encodedResultNBT = codec.encodeStart(`instance$DynamicOps$NBT`, componentValue)
-        if (encodedResultNBT.isError) {
+        val encodedResultNBT = codecEncodeStart(codec, `instance$DynamicOps$NBT`, componentValue)
+        if (dataResultIsError(encodedResultNBT)) {
             continue
         }
-        val nbtTag = encodedResultNBT.result().orElse(null) ?: continue
 
-        val encodedResultJson = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
-        if (encodedResultJson.isError) {
+        val encodedResultJson = codecEncodeStart(codec, `instance$DynamicOps$JSON`, componentValue)
+        if (dataResultIsError(encodedResultJson)) {
             continue
         }
-        val componentJson = encodedResultJson.result().orElse(null) ?: continue
+        val componentJson = dataResultResult<JsonElement>(encodedResultJson).orElse(null) ?: continue
 
         result[resourceLocationStr] = componentJson
     }
@@ -761,10 +766,10 @@ fun Any.getComponentsNMSFiltered(): Map<String, JsonElement> {
         // 4. 序列化为 JSON
         val codec = getCodecForComponentType(componentType) ?: continue
 
-        val encodedResult = codec.encodeStart(`instance$DynamicOps$JSON`, componentValue)
-        if (encodedResult.isError) continue
+        val encodedResult = codecEncodeStart(codec, `instance$DynamicOps$JSON`, componentValue)
+        if (dataResultIsError(encodedResult)) continue
 
-        val jsonElement = encodedResult.result().orElse(null) ?: continue
+        val jsonElement = dataResultResult<JsonElement>(encodedResult).orElse(null) ?: continue
         result[componentType.toString()] = jsonElement
     }
 
@@ -870,38 +875,35 @@ fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
 
         val codec = getCodecForComponentType(componentType) ?: continue
 
-        val encodedResult = codec.encodeStart(`instance$DynamicOps$JAVA`, componentValue)
-        if (encodedResult.isError) continue
+        val encodedResult = codecEncodeStart(codec, `instance$DynamicOps$JAVA`, componentValue)
+        if (dataResultIsError(encodedResult)) continue
 
-        val element = encodedResult.result().orElse(null) ?: continue
+        val element = dataResultResult<Any>(encodedResult).orElse(null) ?: continue
         result[componentType.toString()] = element
     }
 
     return result
 }
 // ========== 辅助函数：获取 Codec（带缓存） ==========
-private val codecCache = mutableMapOf<Any, Codec<Any>>()
+private val codecCache = mutableMapOf<Any, Any>()
 
-@Suppress("UNCHECKED_CAST")
-private fun getCodecForComponentType(componentType: Any): Codec<Any>? {
-    return codecCache.getOrPut(componentType) {
+private fun findCodecMethod(componentType: Any): Method? {
+    // 用 getMethod 而非 getDeclaredMethod：codecOrThrow 是接口上的 default 方法，
+    // 实现类不声明它，getDeclaredMethod 会抛 NoSuchMethodException
+    return try {
+        componentType.javaClass.getMethod("codec")
+    } catch (_: NoSuchMethodException) {
         try {
-            val codecMethod = componentType.javaClass.getDeclaredMethod("codec").apply {
-                isAccessible = true
-            }
-            codecMethod.invoke(componentType) as Codec<Any>
-        } catch (e: NoSuchMethodException) {
-            try {
-                val codecMethod = componentType.javaClass.getDeclaredMethod("codecOrThrow").apply {
-                    isAccessible = true
-                }
-                codecMethod.invoke(componentType) as Codec<Any>
-            } catch (e2: Exception) {
-                null
-            }
-        } catch (e: Exception) {
+            componentType.javaClass.getMethod("codecOrThrow")
+        } catch (_: NoSuchMethodException) {
             null
-        } ?: return null
+        }
+    }
+}
+
+private fun getCodecForComponentType(componentType: Any): Any? {
+    return codecCache.getOrPut(componentType) {
+        runCatching { findCodecMethod(componentType)?.invoke(componentType) }.getOrNull() ?: return null
     }
 }
 

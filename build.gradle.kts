@@ -20,15 +20,13 @@ repositories {
 }
 
 dependencies {
-    // Incompatible with spigot
-    // because spigot using legacy DataResult(class) paper using modern DataResult(interface).
-    //    compileOnly("ink.ptms.core:v12104:12104:mapped")
-    //    compileOnly("ink.ptms.core:v12104:12104:universal")
+    // Spigot 兼容说明：DFU（com.mojang.serialization.*）已全部反射化，
+    // DataResult 在 MC 1.21.1 及以前是 class、MC 1.21.2 起是 interface（DFU 8.0.16），
+    // 直接引用会因字节码指令差异抛 IncompatibleClassChangeError。
     compileOnly(kotlin("stdlib"))
     compileOnly("com.google.code.gson:gson:2.10.1")
-    //    compileOnly("org.spigot:spigot-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("com.mojang:datafixerupper:8.0.16")
+    // 只用到了 org.bukkit.inventory.ItemStack 与 craftbukkit 反射，spigot-api 足够
+    compileOnly("org.spigotmc:spigot-api:1.21.4-R0.1-SNAPSHOT")
 }
 
 tasks.withType<JavaCompile> {
