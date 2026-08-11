@@ -9,17 +9,76 @@ import java.util.Optional
 //import net.minecraft.core.component.DataComponentType
 //import net.minecraft.core.RegistryAccess
 
+// ========== Spigot 映射层 ==========
+// Spigot 服务端：类名 = mojmap 名（少数历史例外），方法/字段名 = Mojang 官方混淆名（obf）。
+// Paper 服务端：全部 = mojmap 名。
+// 映射数据从 Mojang 官方 1.21.4 server mappings 提取（已与 Spigot 1.21.4 jar javap 逐一核对）。
+private val isSpigotNMS: Boolean by lazy {
+    classExists("net.minecraft.resources.MinecraftKey") && !classExists("net.minecraft.resources.ResourceLocation")
+}
+
+// mojmap 类名 → Spigot 类名（历史遗留名）
+private val spigotClassName = mapOf(
+    "net.minecraft.resources.ResourceLocation" to "net.minecraft.resources.MinecraftKey",
+    "net.minecraft.core.Registry" to "net.minecraft.core.IRegistry",
+    "net.minecraft.core.HolderLookup\$Provider" to "net.minecraft.core.HolderLookup\$a",
+    "net.minecraft.core.RegistryAccess\$Frozen" to "net.minecraft.core.IRegistryCustom\$Dimension",
+    "net.minecraft.nbt.NbtOps" to "net.minecraft.nbt.DynamicOpsNBT",
+    "net.minecraft.nbt.Tag" to "net.minecraft.nbt.NBTBase",
+)
+
+// mojmap 方法名 → Spigot obf 名（键：类#方法）
+private val spigotMethodName = mapOf(
+    "net.minecraft.world.item.ItemStack#getComponents" to "a",
+    "net.minecraft.world.item.ItemStack#getComponentsPatch" to "d",
+    "net.minecraft.world.item.ItemStack#getItem" to "h",
+    "net.minecraft.world.item.ItemStack#set" to "b",
+    "net.minecraft.world.item.ItemStack#remove" to "d",
+    "net.minecraft.world.item.Item#components" to "g",
+    "net.minecraft.core.component.DataComponentType#codec" to "b",
+    "net.minecraft.core.component.DataComponentType#codecOrThrow" to "c",
+    "net.minecraft.core.component.DataComponentHolder#get" to "a",
+    "net.minecraft.core.component.DataComponentHolder#getComponents" to "a",
+    "net.minecraft.core.component.DataComponentMap#getTyped" to "c",
+    "net.minecraft.core.component.DataComponentPatch#entrySet" to "b",
+    "net.minecraft.core.component.TypedDataComponent#type" to "a",
+    "net.minecraft.core.component.TypedDataComponent#value" to "b",
+    "net.minecraft.resources.RegistryOps#create" to "a",
+    "net.minecraft.server.MinecraftServer#registryAccess" to "ba",
+    "net.minecraft.resources.ResourceLocation#fromNamespaceAndPath" to "a",
+    "net.minecraft.resources.ResourceLocation#tryParse" to "c",
+    "net.minecraft.core.Registry#getValue" to "a",
+    "net.minecraft.core.Holder#value" to "a",
+)
+
+// mojmap 字段名 → Spigot obf 名（键：类#字段）
+private val spigotFieldName = mapOf(
+    "net.minecraft.core.registries.BuiltInRegistries#DATA_COMPONENT_TYPE" to "ao",
+    "net.minecraft.nbt.NbtOps#INSTANCE" to "a",
+)
+
+fun mcClassName(mojmap: String): String =
+    if (isSpigotNMS) spigotClassName[mojmap] ?: mojmap else mojmap
+
+fun mcMethodName(owner: String, mojmapName: String): String =
+    if (isSpigotNMS) spigotMethodName["$owner#$mojmapName"] ?: mojmapName else mojmapName
+
+fun mcFieldName(owner: String, mojmapName: String): String =
+    if (isSpigotNMS) spigotFieldName["$owner#$mojmapName"] ?: mojmapName else mojmapName
+
 val `clazz$ResourceLocation` by lazy {
     requireNonNull(
-        // 1.21.4: resources.ResourceLocation → 26.1.2+: resources.Identifier
-        resolveMCClass("resources.ResourceLocation", "resources.Identifier")
+        // Paper 1.21.4: resources.ResourceLocation → 26.1.2+: resources.Identifier，Spigot: resources.MinecraftKey
+        resolveMCClass("resources.ResourceLocation", "resources.MinecraftKey", "resources.Identifier")
     )!!
 }
 
 val `clazz$Registry` by lazy {
     requireNonNull(
-        // 1.21.4: core.IRegistryWritable → 26.1.2+: core.Registry
-        resolveMCClass("core.IRegistryWritable", "core.Registry", "core.WritableRegistry")
+        // Spigot 世界里 mojmap Registry 的类名是 IRegistry；"net.minecraft.core.Registry" 这个名字在 Spigot 上属于 mojmap 的 IdMap。
+        // Paper 的 reflection-rewriter 也会把 Class.forName("net.minecraft.core.Registry") 按 reobf.tiny 改写为 IdMap，
+        // 所以必须用 loadClassDirect（ClassLoader.loadClass 不在重写规则内）绕过。
+        loadClassDirect(assembleMCClass(if (isSpigotNMS) "core.IRegistry" else "core.Registry"))
     )!!
 }
 
@@ -58,7 +117,7 @@ val `clazz$MinecraftServer` by lazy {
 val `field$BuiltInRegistries$DATA_COMPONENT_TYPE` by lazy {
     requireNonNull(
         getDeclaredField(
-            `clazz$BuiltInRegistries`, "DATA_COMPONENT_TYPE"
+            `clazz$BuiltInRegistries`, mcFieldName("net.minecraft.core.registries.BuiltInRegistries", "DATA_COMPONENT_TYPE")
         )
     )!!
 }
@@ -75,8 +134,9 @@ val `method$ResourceLocation$fromNamespaceAndPath` by lazy {
 
 val `method$Registry$getValue` by lazy {
     requireNonNull(
-        getMethod(
-            `clazz$Registry`, Any::class.java, 0, `clazz$ResourceLocation`
+        `clazz$Registry`.getMethod(
+            mcMethodName("net.minecraft.core.Registry", "getValue"),
+            `clazz$ResourceLocation`
         )
     )!!
 }
@@ -91,16 +151,16 @@ val `clazz$RegistryOps` by lazy {
 
 val `clazz$HolderLookup$Provider` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("core.HolderLookup\$Provider")
-        )
+        // Spigot 的内部类名混淆为 $a
+        getClazz(mcClassName("net.minecraft.core.HolderLookup\$Provider"))!!
     )!!
 }
 
 val `method$RegistryOps$create` by lazy {
     requireNonNull(
-        getMethod(
-            `clazz$RegistryOps`, `clazz$RegistryOps`, 0, `clazz$DynamicOps`, `clazz$HolderLookup$Provider`
+        `clazz$RegistryOps`.getMethod(
+            mcMethodName("net.minecraft.resources.RegistryOps", "create"),
+            `clazz$DynamicOps`, `clazz$HolderLookup$Provider`
         )
     )!!
 }
@@ -118,16 +178,15 @@ val `instance$MinecraftServer$SERVER` by lazy {
 }
 val `clazz$RegistryAccess$Frozen` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("core.RegistryAccess\$Frozen")
-        )
+        // Spigot: RegistryAccess → IRegistryCustom，Frozen → Dimension
+        getClazz(mcClassName("net.minecraft.core.RegistryAccess\$Frozen"))!!
     )!!
 }
 
 val `method$MinecraftServer$registryAccess` by lazy {
     requireNonNull(
-        getMethod(
-            `clazz$MinecraftServer`, `clazz$RegistryAccess$Frozen`, 0
+        `clazz$MinecraftServer`.getMethod(
+            mcMethodName("net.minecraft.server.MinecraftServer", "registryAccess")
         )
     )!!
 }
@@ -137,14 +196,21 @@ val `instance$MinecraftServer$registryAccess` by lazy {
 }
 val `method$DataComponentType$codec` by lazy {
     // codec() 与 codecOrThrow() 都返回 Codec，按名字精确查找
-    requireNonNull(`clazz$DataComponentType`.getMethod("codec"))!!
+    requireNonNull(
+        `clazz$DataComponentType`.getMethod(
+            mcMethodName("net.minecraft.core.component.DataComponentType", "codec")
+        )
+    )!!
 }
 
 val `method$DataComponentHolder$getDataComponentType` by lazy {
     // 按名字精确查找：getTyped(DataComponentType) 与 get(DataComponentType) 参数/返回类型相同，
-    // 按返回类型+索引匹配可能在 Spigot 上拿到 getTyped（返回 Optional），必须按名字
+    // 按返回类型+索引匹配可能拿到 getTyped（返回 Optional），必须按名字
     requireNonNull(
-        `clazz$DataComponentHolder`.getMethod("get", `clazz$DataComponentType`)
+        `clazz$DataComponentHolder`.getMethod(
+            mcMethodName("net.minecraft.core.component.DataComponentHolder", "get"),
+            `clazz$DataComponentType`
+        )
     )!!
 }
 
@@ -156,10 +222,13 @@ val `clazz$ItemStack` by lazy {
     )!!
 }
 
-val `method$ItemStack$setComponent` by lazy {
-    // 按名字精确查找：旧版还有同签名的 set(DataComponentType, T)
+val `method$ItemStack$set` by lazy {
+    // 注意：mojmap 1.21.4 的方法名是 set() 而不是 setComponent()（Paper/Spigot 都是 set → Spigot obf b）
     requireNonNull(
-        `clazz$ItemStack`.getMethod("setComponent", `clazz$DataComponentType`, Any::class.java)
+        `clazz$ItemStack`.getMethod(
+            mcMethodName("net.minecraft.world.item.ItemStack", "set"),
+            `clazz$DataComponentType`, Any::class.java
+        )
     )!!
 }
 
@@ -173,16 +242,15 @@ val `clazz$CraftItemStack` by lazy {
 
 val `clazz$NbtOps` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("nbt.NbtOps")
-        )
+        // Spigot: NbtOps 不存在，改名为 DynamicOpsNBT
+        getClazz(mcClassName("net.minecraft.nbt.NbtOps"))!!
     )!!
 }
 
 val `field$NbtOps$INSTANCE` by lazy {
     // 按名字查找：NbtOps 有 INSTANCE 与 LEGACY_INSTANCE 两个同类型静态字段，按类型+索引可能拿错
     requireNonNull(
-        getDeclaredField(`clazz$NbtOps`, "INSTANCE")
+        getDeclaredField(`clazz$NbtOps`, mcFieldName("net.minecraft.nbt.NbtOps", "INSTANCE"))
     )!!
 }
 
@@ -266,24 +334,27 @@ val `instance$DynamicOps$JSON` by lazy {
 
 val `clazz$Tag` by lazy {
     requireNonNull(
-        getClazz(
-            assembleMCClass("nbt.Tag")
-        )
+        // Spigot: Tag 不存在，改名为 NBTBase
+        getClazz(mcClassName("net.minecraft.nbt.Tag"))!!
     )!!
 }
 
 val `method$ResourceLocation$tryParse` by lazy {
     requireNonNull(
-        getStaticMethod(
-            `clazz$ResourceLocation`, `clazz$ResourceLocation`, String::class.java
+        `clazz$ResourceLocation`.getMethod(
+            mcMethodName("net.minecraft.resources.ResourceLocation", "tryParse"),
+            String::class.java
         )
     )!!
 }
 
-val `method$ItemStack$removeComponent` by lazy {
-    // 按名字精确查找：旧版还有同签名的 remove(DataComponentType)
+val `method$ItemStack$remove` by lazy {
+    // 注意：mojmap 1.21.4 的方法名是 remove() 而不是 removeComponent()（Paper/Spigot 都是 remove → Spigot obf d）
     requireNonNull(
-        `clazz$ItemStack`.getMethod("removeComponent", `clazz$DataComponentType`)
+        `clazz$ItemStack`.getMethod(
+            mcMethodName("net.minecraft.world.item.ItemStack", "remove"),
+            `clazz$DataComponentType`
+        )
     )!!
 }
 
@@ -308,7 +379,7 @@ fun setComponentInternal(itemStack: Any, type: Any, ops: Any, value: Any) {
     val result = codecParse(codec, ops, value)
     if (dataResultIsError(result)) throw IllegalArgumentException(result.toString())
     dataResultResult<Any>(result).ifPresent {
-        `method$ItemStack$setComponent`.invoke(itemStack, res, it)
+        `method$ItemStack$set`.invoke(itemStack, res, it)
     }
 }
 
@@ -350,7 +421,7 @@ fun getNBTComponent(itemStack: Any, type: Any): Optional<Any> {
 }
 
 fun removeComponent(itemStack: Any, type: Any) {
-    `method$ItemStack$removeComponent`.invoke(itemStack, type)
+    `method$ItemStack$remove`.invoke(itemStack, type)
 }
 
 
@@ -394,19 +465,19 @@ fun Any.getComponentsNMS(): Map<String, JsonElement> {
         return result
     }
 
-    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod(mcMethodName("net.minecraft.core.component.DataComponentHolder", "getComponents"))
     val dataComponentMap = getComponentsMethod.invoke(this)!!
 
     // 获取 iterator() 方法
-    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iteratorMethod = dataComponentMap.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "iterator"))
     val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
     while (iterator.hasNext()) {
         val typedDataComponent = iterator.next()
 
         // typedDataComponent 需要通过反射访问 type() 和 value()
-        val typeMethod = typedDataComponent.javaClass.getMethod("type")
-        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+        val typeMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "type"))
+        val valueMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
 
         val componentType = typeMethod.invoke(typedDataComponent)
         val componentValue = valueMethod.invoke(typedDataComponent)
@@ -430,19 +501,19 @@ fun Any.getComponentsJavaNMS(): Map<String, Any?> {
         return result
     }
 
-    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod(mcMethodName("net.minecraft.core.component.DataComponentHolder", "getComponents"))
     val dataComponentMap = getComponentsMethod.invoke(this)!!
 
     // 获取 iterator() 方法
-    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iteratorMethod = dataComponentMap.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "iterator"))
     val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
     while (iterator.hasNext()) {
         val typedDataComponent = iterator.next()
 
         // typedDataComponent 需要通过反射访问 type() 和 value()
-        val typeMethod = typedDataComponent.javaClass.getMethod("type")
-        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+        val typeMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "type"))
+        val valueMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
 
         val componentType = typeMethod.invoke(typedDataComponent)
         val componentValue = valueMethod.invoke(typedDataComponent)
@@ -466,16 +537,16 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
         return result
     }
 
-    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod(mcMethodName("net.minecraft.core.component.DataComponentHolder", "getComponents"))
     val dataComponentMapInstance = getComponentsMethod.invoke(this) ?: return result
 
-    val iteratorMethod = dataComponentMapInstance.javaClass.getMethod("iterator")
+    val iteratorMethod = dataComponentMapInstance.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "iterator"))
     val iterator = iteratorMethod.invoke(dataComponentMapInstance) as Iterator<Any>
 
     while (iterator.hasNext()) {
         val typedDataComponent = iterator.next()
 
-        val typeMethod = typedDataComponent.javaClass.getMethod("type")
+        val typeMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "type"))
         val componentTypeRaw = typeMethod.invoke(typedDataComponent)
 
         // 反射调用 toString 得到 resourceLocation字符串
@@ -487,7 +558,7 @@ fun Any.getComponentsNMSFilteredLegacy(): Map<String, Any?> {
             ?: continue
         val componentType = unwrapValue(componentTypeOptional) ?: continue
 
-        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+        val valueMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
         val componentValue = valueMethod.invoke(typedDataComponent)
 
         println("componentType class: ${componentType?.javaClass?.name}")
@@ -539,7 +610,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
     }
 
     val getComponentsPatchMethod = try {
-        this.javaClass.getMethod("getComponentsPatch")
+        this.javaClass.getMethod(mcMethodName("net.minecraft.world.item.ItemStack", "getComponentsPatch"))
     } catch (e: NoSuchMethodException) {
         return result
     }
@@ -547,7 +618,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
     val patch = getComponentsPatchMethod.invoke(this) ?: return result
 
     val getItemMethod = try {
-        this.javaClass.getMethod("getItem")
+        this.javaClass.getMethod(mcMethodName("net.minecraft.world.item.ItemStack", "getItem"))
     } catch (e: NoSuchMethodException) {
         return result
     }
@@ -555,7 +626,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
     val item = getItemMethod.invoke(this) ?: return result
 
     val getComponentsMethodOfItem = try {
-        item.javaClass.getMethod("components")
+        item.javaClass.getMethod(mcMethodName("net.minecraft.world.item.Item", "components"))
     } catch (e: NoSuchMethodException) {
         return result
     }
@@ -564,7 +635,7 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
 
 
     // 获取 patch.entrySet()
-    val entrySetMethod = patch.javaClass.getMethod("entrySet")
+    val entrySetMethod = patch.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentPatch", "entrySet"))
     val entrySet = entrySetMethod.invoke(patch) as Set<*>
 
     for (entryObj in entrySet) {
@@ -586,13 +657,13 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
         println("isInstance: ${`clazz$DataComponentType`.isInstance(componentType)}")
 
 
-        val prototypeGetTypedMethod = prototype.javaClass.getMethod("getTyped", `clazz$DataComponentType`)
+        val prototypeGetTypedMethod = prototype.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "getTyped"), `clazz$DataComponentType`)
         val prototypeTyped = prototypeGetTypedMethod.invoke(prototype, componentType)
 
 
 
         if (prototypeTyped != null) {
-            val prototypeValueMethod = prototypeTyped.javaClass.getMethod("value")
+            val prototypeValueMethod = prototypeTyped.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
             val prototypeValue = prototypeValueMethod.invoke(prototypeTyped)
             if (prototypeValue == componentValue) {
                 // 补丁值和原型相同，跳过
@@ -620,31 +691,31 @@ fun Any.getComponentsNMSFilteredWithoutCache(): Map<String, JsonElement> {
 }
 // ========== 缓存反射方法 ==========
 private val `method$ItemStack$getComponentsPatch` by lazy {
-    `clazz$ItemStack`.getMethod("getComponentsPatch")
+    `clazz$ItemStack`.getMethod(mcMethodName("net.minecraft.world.item.ItemStack", "getComponentsPatch"))
 }
 
 private val `method$ItemStack$getItem` by lazy {
-    `clazz$ItemStack`.getMethod("getItem")
+    `clazz$ItemStack`.getMethod(mcMethodName("net.minecraft.world.item.ItemStack", "getItem"))
 }
 
 private val `method$Item$components` by lazy {
     val itemClass = getClazz(assembleMCClass("world.item.Item"))!!
-    itemClass.getMethod("components")
+    itemClass.getMethod(mcMethodName("net.minecraft.world.item.Item", "components"))
 }
 
 private val `method$DataComponentPatch$entrySet` by lazy {
     val patchClass = getClazz(assembleMCClass("core.component.DataComponentPatch"))!!
-    patchClass.getMethod("entrySet")
+    patchClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentPatch", "entrySet"))
 }
 
 private val `method$DataComponentMap$getTyped` by lazy {
     val mapClass = getClazz(assembleMCClass("core.component.DataComponentMap"))!!
-    mapClass.getMethod("getTyped", `clazz$DataComponentType`)
+    mapClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "getTyped"), `clazz$DataComponentType`)
 }
 
 private val `method$TypedDataComponent$value` by lazy {
     val typedClass = getClazz(assembleMCClass("core.component.TypedDataComponent"))!!
-    typedClass.getMethod("value")
+    typedClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
 }
 //
 //// ========== 优化后的主函数 ==========
@@ -729,17 +800,17 @@ fun Any.getComponentsNMSFiltered(): Map<String, JsonElement> {
     val prototype = `method$Item$components`.invoke(item) ?: return result
 
     // 2. 获取 ItemStack 全量组件（已合并 patch）
-    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod(mcMethodName("net.minecraft.core.component.DataComponentHolder", "getComponents"))
     val dataComponentMap = getComponentsMethod.invoke(this) ?: return result
 
-    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iteratorMethod = dataComponentMap.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "iterator"))
     val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
     while (iterator.hasNext()) {
         val typedDataComponent = iterator.next()
 
-        val typeMethod = typedDataComponent.javaClass.getMethod("type")
-        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+        val typeMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "type"))
+        val valueMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
 
         val componentType = typeMethod.invoke(typedDataComponent) ?: continue
         val componentValue = valueMethod.invoke(typedDataComponent) ?: continue
@@ -846,17 +917,17 @@ fun Any.getComponentsJavaNMSFiltered(): Map<String, Any?> {
     val item = `method$ItemStack$getItem`.invoke(this) ?: return result
     val prototype = `method$Item$components`.invoke(item) ?: return result
 
-    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod("getComponents")
+    val getComponentsMethod = `clazz$DataComponentHolder`.getMethod(mcMethodName("net.minecraft.core.component.DataComponentHolder", "getComponents"))
     val dataComponentMap = getComponentsMethod.invoke(this) ?: return result
 
-    val iteratorMethod = dataComponentMap.javaClass.getMethod("iterator")
+    val iteratorMethod = dataComponentMap.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentMap", "iterator"))
     val iterator = iteratorMethod.invoke(dataComponentMap) as Iterator<Any>
 
     while (iterator.hasNext()) {
         val typedDataComponent = iterator.next()
 
-        val typeMethod = typedDataComponent.javaClass.getMethod("type")
-        val valueMethod = typedDataComponent.javaClass.getMethod("value")
+        val typeMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "type"))
+        val valueMethod = typedDataComponent.javaClass.getMethod(mcMethodName("net.minecraft.core.component.TypedDataComponent", "value"))
 
         val componentType = typeMethod.invoke(typedDataComponent) ?: continue
         val componentValue = valueMethod.invoke(typedDataComponent) ?: continue
@@ -891,10 +962,10 @@ private fun findCodecMethod(componentType: Any): Method? {
     // 用 getMethod 而非 getDeclaredMethod：codecOrThrow 是接口上的 default 方法，
     // 实现类不声明它，getDeclaredMethod 会抛 NoSuchMethodException
     return try {
-        componentType.javaClass.getMethod("codec")
+        componentType.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentType", "codec"))
     } catch (_: NoSuchMethodException) {
         try {
-            componentType.javaClass.getMethod("codecOrThrow")
+            componentType.javaClass.getMethod(mcMethodName("net.minecraft.core.component.DataComponentType", "codecOrThrow"))
         } catch (_: NoSuchMethodException) {
             null
         }
@@ -919,7 +990,7 @@ fun Any.removeComponentNMS(componentId: String): Any? {
 
     return try {
         // 使用缓存的反射方法，传入 ItemStack 实例和获取到的 DataComponentType 实例
-        `method$ItemStack$removeComponent`.invoke(this, componentType)
+        `method$ItemStack$remove`.invoke(this, componentType)
     } catch (e: Exception) {
         // 在反射调用失败时打印错误并返回 null
         e.printStackTrace()

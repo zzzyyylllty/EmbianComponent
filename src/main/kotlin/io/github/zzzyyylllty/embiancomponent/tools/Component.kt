@@ -192,7 +192,7 @@ class ComponentSetter {
         try {
             // Invoke the NMS ItemStack.removeComponent(DataComponentType) method.
             // This method modifies 'this' (the NMS ItemStack) and returns the old value, which we discard.
-            `method$ItemStack$removeComponent`.invoke(item, componentType)
+            `method$ItemStack$remove`.invoke(item, componentType)
         } catch (e: Exception) {
             // Log the error if the reflection call fails.
             e.printStackTrace()

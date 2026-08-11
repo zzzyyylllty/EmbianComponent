@@ -36,9 +36,17 @@ fun resolveCBClass(className: String): String? {
 
 private object ClassLoaderHolder
 
-private fun classExists(name: String): Boolean =
-    // initialize=false：只加载类，不触发静态初始化
-    runCatching { Class.forName(name, false, ClassLoaderHolder::class.java.classLoader) }.isSuccess
+/**
+ * 直接加载指定字面名字的类，绕过 Paper 的 reflection-rewriter。
+ * Paper 会把插件字节码里的 Class.forName 等调用重定向到 PaperReflection 代理，并按 reobf.tiny
+ * （mojang↔spigot）改写类名：例如 "net.minecraft.core.Registry" 会被改写成 "net.minecraft.core.IdMap"
+ * （Spigot 世界里 Registry 这个名字属于 mojmap 的 IdMap）。ClassLoader.loadClass 不在重写规则内，
+ * 加载的是真实类。不触发静态初始化。
+ */
+fun loadClassDirect(name: String): Class<*>? =
+    runCatching { ClassLoaderHolder::class.java.classLoader.loadClass(name) }.getOrNull()
+
+fun classExists(name: String): Boolean = loadClassDirect(name) != null
 
 private val craftbukkitVersionSuffix: String by lazy {
     runCatching {
@@ -58,7 +66,8 @@ fun unwrapValue(obj: Any): Any? {
         // throw IllegalArgumentException("Optional empty")
     }
     if (holderClass.isInstance(obj)) {
-        val methodNameCandidates = listOf("get", "value")
+        // 候选名按环境生效：Paper(mojmap)=get/value，Spigot 上 Holder 的方法被混淆为 a()
+        val methodNameCandidates = listOf("get", "value", "a")
         val getMethod = methodNameCandidates.asSequence()
             .mapNotNull {
                 try {
@@ -80,14 +89,7 @@ fun unwrapValue(obj: Any): Any? {
 }
 
 
-fun getClazz(className: String): Class<*>? {
-    return try {
-        Class.forName(className)
-    } catch (e: Throwable) {
-        e.printStackTrace()
-        null
-    }
-}
+fun getClazz(className: String): Class<*>? = loadClassDirect(className)
 
 /**
  * Try multiple class names, for cross-version compatibility (e.g. ResourceLocation → Identifier).
@@ -95,11 +97,7 @@ fun getClazz(className: String): Class<*>? {
  */
 fun resolveMCClass(vararg candidates: String): Class<*>? {
     for (candidate in candidates) {
-        try {
-            return Class.forName(MC_PREFIX + candidate)
-        } catch (_: ClassNotFoundException) {
-            continue
-        }
+        loadClassDirect(MC_PREFIX + candidate)?.let { return it }
     }
     return null
 }
